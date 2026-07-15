@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Build dbt manifest (needed by orchestration test)
+        working-directory: dbt
+        run: |
+          dbt deps --profiles-dir .
+          dbt parse --profiles-dir .
+        env:
+          MIZANI_DB: ${{ github.workspace }}/data/fixture.duckdb
+
+      - name: Unit tests (offline, fixture data only)
+        run: pytest
+
+      - name: Build fixture warehouse (bronze + silver, no network)
+        run: python scripts/build_fixture_warehouse.py data/fixture.duckdb
+
+      - name: dbt build (gold star schema + data tests)
+        working-directory: dbt
+        run: dbt build --profiles-dir .
+        env:
+          MIZANI_DB: ${{ github.workspace }}/data/fixture.duckdb
