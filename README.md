@@ -7,9 +7,8 @@ quarantines them declaratively, and models them into a star schema.
 
 *Mizani* is Swahili for "scales / balance."
 
-> **Status: work in progress.** Milestone 1 (bronze extraction) is complete and tested.
-> Silver validation, dbt gold layer, and orchestration are in flight — see the roadmap
-> below.
+> **Status: work in progress.** Bronze extraction and silver validation are complete
+> and tested. The dbt gold layer and orchestration are in flight — see the roadmap below.
 
 ## Data sources
 
@@ -49,6 +48,27 @@ actual pipeline run on that date, not estimated.
 * Never cleaned in bronze: the CBK duplicate rows, `CAN $` labels, and MM/DD/YYYY
   dates all flow through for silver to handle.
 
+### The silver contract (implemented)
+
+Silver is rebuilt deterministically from bronze on each run. Validation is declarative
+(Pandera schemas, one per source); rows that fail any check land in `silver.quarantine`
+with their original raw payload and a human-readable reason list — nothing is silently
+dropped. Rows sharing a business key with **different** values are both quarantined as
+conflicts; the pipeline never guesses which revision is true.
+
+Measured on the 2026-07-15 live run:
+
+| Silver table | Rows in | Clean | Quarantined | Why quarantined |
+|---|---|---|---|---|
+| `fx_rates_daily` | 37,392 | 37,154 | 235 | 210 conflicting republished rates; **22 rows from 2017-03-28, a day CBK published with buy > sell across all currencies**; 1 future date (2038); 1 mangled header fragment; 1 empty currency label |
+| `worldbank_annual` | 208 | 121 | 87 | missing observations (API returns explicit nulls) |
+| `mobile_payments_monthly` | 231 | 231 | 0 | — |
+| `gsma_metrics_quarterly` | 56,616 | 56,616 | 0 | — |
+
+The CBK file's slash-dates were proven to be DD/MM (not MM/DD) by matching identical
+rate values across the file's two date formats — documented in
+[`silver/cbk_fx.py`](src/mizani/silver/cbk_fx.py).
+
 ## Running it
 
 ```bash
@@ -64,7 +84,7 @@ the real payloads captured on 2026-07-15.
 
 - [x] **M0** — verify sources are actually live; pick for messiness + reliability
 - [x] **M1** — bronze extraction: 4 extractors, idempotent landing, ingestion log, 16 offline tests
-- [ ] **M2** — silver: declarative Pandera validation, quarantine-with-reason, semantic dedup
+- [x] **M2** — silver: declarative Pandera validation, quarantine-with-reason, semantic dedup
 - [ ] **M3** — gold: dbt-duckdb star schema (fact exchange rates / mobile money; dims country, currency, date) + dbt tests
 - [ ] **M4** — orchestration: Dagster asset graph, retries, 30-day backfill story
 - [ ] **M5** — CI (lint + tests + dbt build on fixtures), analytical notebook, Docker one-command run, limitations doc
