@@ -77,6 +77,30 @@ and four facts — `fact_exchange_rate` (37,154 rows, every quote normalized to 
 rows), `fact_worldbank_indicator` (121), `fact_gsma_metric` (56,616). 28 dbt data
 tests (unique, not_null, relationships, ranges) — 41/41 green including seeds/models.
 
+### Orchestration (implemented)
+
+Dagster models the pipeline as a 21-asset graph (bronze → silver → dbt staging/gold),
+scheduled daily at 07:00 Nairobi time. The full live run — fetch all four sources,
+rebuild silver, dbt build with all tests — takes **54 seconds** (measured 2026-07-15).
+
+* **Why Dagster over Airflow:** the pipeline is asset-shaped, Dagster runs locally
+  without a Postgres + scheduler stack, and `dagster-dbt` exposes every dbt model as a
+  first-class asset with lineage.
+* **Retries:** bronze assets retry 3× with exponential backoff — the CBK website
+  actually dropped a TLS connection mid-run during development, so this is not
+  hypothetical.
+* **Backfill story:** every source publishes a full snapshot, so "re-run the last 30
+  days after a format change" is: fix the parser, materialize the graph. Hash-based
+  bronze landing re-inserts only changed rows; silver/gold rebuild deterministically.
+  Per-day partitions would be dishonest — the sources cannot be fetched per-day.
+* **Serialized execution:** DuckDB is single-writer, so the job pins the in-process
+  executor instead of letting multiprocess steps race on the file.
+
+```bash
+dagster dev -m mizani.orchestration.definitions   # UI at localhost:3000
+dagster job execute -m mizani.orchestration.definitions -j full_refresh
+```
+
 ## Running it
 
 ```bash
@@ -94,5 +118,5 @@ the real payloads captured on 2026-07-15.
 - [x] **M1** — bronze extraction: 4 extractors, idempotent landing, ingestion log, 16 offline tests
 - [x] **M2** — silver: declarative Pandera validation, quarantine-with-reason, semantic dedup
 - [x] **M3** — gold: dbt-duckdb star schema (fact exchange rates / mobile money; dims country, currency, date) + dbt tests
-- [ ] **M4** — orchestration: Dagster asset graph, retries, 30-day backfill story
+- [x] **M4** — orchestration: Dagster asset graph, retries, honest backfill story
 - [ ] **M5** — CI (lint + tests + dbt build on fixtures), analytical notebook, Docker one-command run, limitations doc

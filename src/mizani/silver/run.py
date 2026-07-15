@@ -21,7 +21,7 @@ import pandas as pd
 
 from mizani.db import connect
 from mizani.silver import cbk_fx, cbk_mobile, gsma, worldbank
-from mizani.silver.quarantine import validate_and_split, write_quarantine
+from mizani.silver.quarantine import QUARANTINE_DDL, validate_and_split, write_quarantine
 
 log = logging.getLogger("mizani.silver")
 
@@ -51,6 +51,13 @@ def _dedup(clean: pd.DataFrame, key: list[str]) -> tuple[pd.DataFrame, pd.DataFr
 
 
 def build_source(con: duckdb.DuckDBPyConnection, module) -> dict:
+    # silver (and its quarantine slate) is rebuilt per source: clear this
+    # source's previous quarantine rows so re-runs don't accumulate
+    con.execute(QUARANTINE_DDL)
+    con.execute(
+        "DELETE FROM silver.quarantine WHERE target_table = ?",
+        [f"silver.{module.SILVER_TABLE}"],
+    )
     bronze = con.execute(f"SELECT * FROM bronze.{module.BRONZE_TABLE}").fetchdf()
     candidate = module.transform(bronze)
     clean, failed, reasons = validate_and_split(candidate, module.SCHEMA)
@@ -106,9 +113,6 @@ def build_source(con: duckdb.DuckDBPyConnection, module) -> dict:
 def run_all(db_path=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     con = connect(db_path)
-    # quarantine is rebuilt with silver: clear this run's slate first so
-    # re-runs don't accumulate duplicate quarantine rows
-    con.execute("DROP TABLE IF EXISTS silver.quarantine")
     failures = 0
     for module in TRANSFORMS:
         try:

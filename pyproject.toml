@@ -10,9 +10,13 @@ dependencies = [
     "openpyxl>=3.1",
     "lxml>=5.0",
     "pandera>=0.20",
+    "dbt-duckdb>=1.8",
+    "dagster>=1.8",
+    "dagster-dbt>=0.24",
 ]
 
 [project.optional-dependencies]
+ui = ["dagster-webserver"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
