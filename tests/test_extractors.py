@@ -46,7 +46,7 @@ def test_cbk_fx_parse_keeps_malformed_rows_for_quarantine():
     text = "11/10/2016,US DOLLAR,101.3,101.2,101.4\nbadrow,onlytwo\na,b,c,d,e,f,g\n"
     df = cbk_fx.parse(text)
     assert len(df) == 3
-    assert df.iloc[1]["mean_raw"] is None  # short row padded
+    assert pd.isna(df.iloc[1]["mean_raw"])  # short row padded
     assert df.iloc[2]["sell_raw"] == "e,f,g"  # long row overflow preserved
 
 
