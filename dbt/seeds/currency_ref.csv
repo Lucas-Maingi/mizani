@@ -1,0 +1,23 @@
+currency_code,currency_name,country_iso3
+USD,US Dollar,
+GBP,Pound Sterling,
+EUR,Euro,
+ZAR,South African Rand,
+AED,UAE Dirham,
+CAD,Canadian Dollar,
+CHF,Swiss Franc,
+JPY,Japanese Yen,
+AUD,Australian Dollar,
+NOK,Norwegian Krone,
+SEK,Swedish Krona,
+DKK,Danish Krone,
+SAR,Saudi Riyal,
+INR,Indian Rupee,
+CNY,Chinese Yuan,
+SGD,Singapore Dollar,
+HKD,Hong Kong Dollar,
+TZS,Tanzanian Shilling,TZA
+UGX,Ugandan Shilling,UGA
+RWF,Rwandan Franc,RWA
+BIF,Burundian Franc,BDI
+KES,Kenyan Shilling,KEN

@@ -1,0 +1,23 @@
+name: mizani
+version: "1.0.0"
+profile: mizani
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+
+target-path: target
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  mizani:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: gold
+
+seeds:
+  mizani:
+    +schema: gold

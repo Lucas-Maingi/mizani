@@ -1,0 +1,17 @@
+version: 2
+
+sources:
+  - name: silver
+    description: >
+      Validated layer built by mizani's Python pipeline (Pandera schemas,
+      quarantine-with-reason). dbt reads silver and builds the gold star schema.
+    schema: silver
+    tables:
+      - name: fx_rates_daily
+        description: CBK daily KES exchange rates, cleaned and deduplicated.
+      - name: mobile_payments_monthly
+        description: CBK monthly mobile-money statistics scraped from the payments page.
+      - name: worldbank_annual
+        description: World Bank annual indicators for KEN/TZA/UGA/RWA.
+      - name: gsma_metrics_quarterly
+        description: GSMA global mobile-money metrics by region/subregion and quarter.

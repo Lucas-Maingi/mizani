@@ -7,8 +7,8 @@ quarantines them declaratively, and models them into a star schema.
 
 *Mizani* is Swahili for "scales / balance."
 
-> **Status: work in progress.** Bronze extraction and silver validation are complete
-> and tested. The dbt gold layer and orchestration are in flight — see the roadmap below.
+> **Status: work in progress.** Bronze, silver, and the dbt gold star schema are
+> complete and tested. Orchestration and CI are in flight — see the roadmap below.
 
 ## Data sources
 
@@ -69,6 +69,14 @@ The CBK file's slash-dates were proven to be DD/MM (not MM/DD) by matching ident
 rate values across the file's two date formats — documented in
 [`silver/cbk_fx.py`](src/mizani/silver/cbk_fx.py).
 
+### The gold star schema (implemented)
+
+Built with dbt-duckdb: `dim_date` (9,193-day spine), `dim_country`, `dim_currency`,
+and four facts — `fact_exchange_rate` (37,154 rows, every quote normalized to KES per
+1 foreign unit across both published conventions), `fact_mobile_money` (231 monthly
+rows), `fact_worldbank_indicator` (121), `fact_gsma_metric` (56,616). 28 dbt data
+tests (unique, not_null, relationships, ranges) — 41/41 green including seeds/models.
+
 ## Running it
 
 ```bash
@@ -85,6 +93,6 @@ the real payloads captured on 2026-07-15.
 - [x] **M0** — verify sources are actually live; pick for messiness + reliability
 - [x] **M1** — bronze extraction: 4 extractors, idempotent landing, ingestion log, 16 offline tests
 - [x] **M2** — silver: declarative Pandera validation, quarantine-with-reason, semantic dedup
-- [ ] **M3** — gold: dbt-duckdb star schema (fact exchange rates / mobile money; dims country, currency, date) + dbt tests
+- [x] **M3** — gold: dbt-duckdb star schema (fact exchange rates / mobile money; dims country, currency, date) + dbt tests
 - [ ] **M4** — orchestration: Dagster asset graph, retries, 30-day backfill story
 - [ ] **M5** — CI (lint + tests + dbt build on fixtures), analytical notebook, Docker one-command run, limitations doc
