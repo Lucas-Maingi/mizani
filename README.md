@@ -1,14 +1,14 @@
 # Mizani — East African economic & mobile-money data platform
 
-**Medallion ETL · dbt · DuckDB · data quality · orchestration** — a bronze/silver/gold
+[![CI](https://github.com/Lucas-Maingi/mizani/actions/workflows/ci.yml/badge.svg)](https://github.com/Lucas-Maingi/mizani/actions/workflows/ci.yml)
+
+**Medallion ETL · Dagster · dbt · DuckDB · data quality** — a bronze/silver/gold
 pipeline that ingests four genuinely messy public data sources (one JSON API, one
 headerless CSV, one HTML scrape, one human-formatted Excel workbook), validates and
 quarantines them declaratively, and models them into a star schema.
 
 *Mizani* is Swahili for "scales / balance."
 
-> **Status: work in progress.** Bronze, silver, and the dbt gold star schema are
-> complete and tested. Orchestration and CI are in flight — see the roadmap below.
 
 ## Data sources
 
@@ -101,16 +101,43 @@ dagster dev -m mizani.orchestration.definitions   # UI at localhost:3000
 dagster job execute -m mizani.orchestration.definitions -j full_refresh
 ```
 
+## The analytical payoff
+
+[`notebooks/mobile_money_analysis.ipynb`](notebooks/mobile_money_analysis.ipynb) answers
+one question from gold alone: **how big is Kenya's mobile-money cash economy in hard
+currency, and is the region catching up?** The USD conversion joins CBK's monthly
+cash-in/cash-out values against that month's average official rate — a join that only
+works because silver normalized three date formats and two quote conventions. It exists
+to prove the star schema is usable, not to be a research paper.
+
 ## Running it
 
 ```bash
+docker compose up pipeline        # full live run: bronze -> silver -> dbt build
+docker compose --profile ui up dagster   # Dagster UI + daily schedule at localhost:3000
+```
+
+or natively:
+
+```bash
 pip install -e ".[dev]"
-python -m mizani.bronze.run   # fetches all four live sources into data/mizani.duckdb
-pytest                        # offline test suite against committed real-data fixtures
+python -m mizani.bronze.run                        # fetch live sources
+python -m mizani.silver.run                        # validate + quarantine
+cd dbt && dbt deps --profiles-dir . && dbt build --profiles-dir .   # gold + tests
+pytest                                             # offline test suite (27 tests)
 ```
 
 Tests never touch the network: `tests/fixtures/` contains small unmodified subsets of
-the real payloads captured on 2026-07-15.
+the real payloads captured on 2026-07-15. CI (and the Docker job) builds a complete
+warehouse from those fixtures and runs the full dbt build against it on every push.
+
+## Design decisions & limitations
+
+[`docs/design-decisions.md`](docs/design-decisions.md) covers the bronze/silver/gold
+contract, the never-guess quarantine philosophy, why DuckDB + Dagster, the
+full-snapshot backfill story, and an honest list of what breaks at 100× scale
+(pandas-sized transforms, full-rebuild semantics, single-writer DuckDB, scrape
+fragility).
 
 ## Roadmap
 
@@ -119,4 +146,4 @@ the real payloads captured on 2026-07-15.
 - [x] **M2** — silver: declarative Pandera validation, quarantine-with-reason, semantic dedup
 - [x] **M3** — gold: dbt-duckdb star schema (fact exchange rates / mobile money; dims country, currency, date) + dbt tests
 - [x] **M4** — orchestration: Dagster asset graph, retries, honest backfill story
-- [ ] **M5** — CI (lint + tests + dbt build on fixtures), analytical notebook, Docker one-command run, limitations doc
+- [x] **M5** — CI (lint + tests + dbt build on fixtures + Docker), analytical notebook, limitations doc

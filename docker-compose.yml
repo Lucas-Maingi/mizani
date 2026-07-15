@@ -1,0 +1,19 @@
+services:
+  # one-shot pipeline run: fetches live sources, builds silver + gold
+  pipeline:
+    build: .
+    volumes:
+      - warehouse:/app/data
+
+  # Dagster UI + schedule at localhost:3000 (docker compose up dagster)
+  dagster:
+    build: .
+    command: dagster dev -m mizani.orchestration.definitions -h 0.0.0.0 -p 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - warehouse:/app/data
+    profiles: ["ui"]
+
+volumes:
+  warehouse:

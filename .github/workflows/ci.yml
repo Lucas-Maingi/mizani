@@ -41,3 +41,17 @@ jobs:
         run: dbt build --profiles-dir .
         env:
           MIZANI_DB: ${{ github.workspace }}/data/fixture.duckdb
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t mizani .
+
+      - name: Offline pipeline inside the container (fixtures + dbt build)
+        run: >
+          docker run --rm mizani sh -c
+          "python scripts/build_fixture_warehouse.py /app/data/fixture.duckdb &&
+           cd dbt && MIZANI_DB=/app/data/fixture.duckdb dbt build --profiles-dir ."
