@@ -6,6 +6,7 @@ No test here touches the network.
 
 import json
 
+import pandas as pd
 import pytest
 
 from mizani.bronze import cbk_fx, cbk_mobile, gsma, worldbank
