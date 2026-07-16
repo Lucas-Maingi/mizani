@@ -10,9 +10,9 @@ import csv
 import io
 
 import pandas as pd
-import requests
 
-from mizani.config import CBK_FX_HISTORICAL_CSV, REQUEST_TIMEOUT, USER_AGENT
+from mizani.bronze import http
+from mizani.config import CBK_FX_HISTORICAL_CSV
 
 SOURCE = "cbk_fx_csv"
 TABLE = "cbk_fx_rates"
@@ -36,11 +36,7 @@ def parse(csv_text: str) -> pd.DataFrame:
 
 
 def fetch() -> str:
-    resp = requests.get(
-        CBK_FX_HISTORICAL_CSV, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT
-    )
-    resp.raise_for_status()
-    return resp.text
+    return http.get(CBK_FX_HISTORICAL_CSV).text
 
 
 def extract() -> pd.DataFrame:

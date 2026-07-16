@@ -6,11 +6,9 @@ strings like every other source — bronze does not trust or coerce.
 """
 
 import pandas as pd
-import requests
 
+from mizani.bronze import http
 from mizani.config import (
-    REQUEST_TIMEOUT,
-    USER_AGENT,
     WORLDBANK_BASE,
     WORLDBANK_COUNTRIES,
     WORLDBANK_INDICATORS,
@@ -59,13 +57,10 @@ def fetch(indicator: str, date_range: str = "2000:2026") -> list[list]:
     url = f"{WORLDBANK_BASE}/country/{countries}/indicator/{indicator}"
     pages, page_no, total_pages = [], 1, 1
     while page_no <= total_pages:
-        resp = requests.get(
+        resp = http.get(
             url,
             params={"format": "json", "date": date_range, "per_page": 500, "page": page_no},
-            headers={"User-Agent": USER_AGENT},
-            timeout=REQUEST_TIMEOUT,
         )
-        resp.raise_for_status()
         body = resp.json()
         if not isinstance(body, list) or "message" in (body[0] or {}):
             raise ValueError(f"World Bank API error for {indicator}: {body}")

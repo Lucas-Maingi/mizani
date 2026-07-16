@@ -7,10 +7,10 @@ browser. Cell text is landed verbatim.
 """
 
 import pandas as pd
-import requests
 from lxml import html as lxml_html
 
-from mizani.config import CBK_MOBILE_PAYMENTS_PAGE, REQUEST_TIMEOUT, USER_AGENT
+from mizani.bronze import http
+from mizani.config import CBK_MOBILE_PAYMENTS_PAGE
 
 SOURCE = "cbk_mobile_html"
 TABLE = "cbk_mobile_payments"
@@ -62,11 +62,7 @@ def parse(page_html: str) -> pd.DataFrame:
 
 
 def fetch() -> str:
-    resp = requests.get(
-        CBK_MOBILE_PAYMENTS_PAGE, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT
-    )
-    resp.raise_for_status()
-    return resp.text
+    return http.get(CBK_MOBILE_PAYMENTS_PAGE).text
 
 
 def extract() -> pd.DataFrame:

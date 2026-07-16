@@ -13,9 +13,9 @@ quarter.
 import io
 
 import pandas as pd
-import requests
 
-from mizani.config import GSMA_DATASET_XLSX, REQUEST_TIMEOUT, USER_AGENT
+from mizani.bronze import http
+from mizani.config import GSMA_DATASET_XLSX
 
 SOURCE = "gsma_xlsx"
 TABLE = "gsma_mobile_money"
@@ -55,11 +55,7 @@ def parse(xlsx_bytes: bytes) -> pd.DataFrame:
 
 
 def fetch() -> bytes:
-    resp = requests.get(
-        GSMA_DATASET_XLSX, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT
-    )
-    resp.raise_for_status()
-    return resp.content
+    return http.get(GSMA_DATASET_XLSX).content
 
 
 def extract() -> pd.DataFrame:
