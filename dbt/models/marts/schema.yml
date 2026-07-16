@@ -89,6 +89,23 @@ models:
       - name: value
         data_tests: [not_null]
 
+  - name: recon_usd_rate_yearly
+    description: >
+      Cross-source consistency check - CBK daily USD averages must agree with
+      the World Bank's independent annual figure within 1% on full-coverage
+      years. Two sources disagreeing beyond tolerance means one of them (or
+      our parsing) is wrong, and the build should fail loudly.
+    columns:
+      - name: year
+        data_tests: [unique, not_null]
+      - name: relative_difference
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 0.01
+
   - name: fact_gsma_metric
     description: GSMA quarterly mobile-money metrics by region/subregion.
     data_tests:

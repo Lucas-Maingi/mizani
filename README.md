@@ -1,6 +1,8 @@
 # Mizani — East African economic & mobile-money data platform
 
 [![CI](https://github.com/Lucas-Maingi/mizani/actions/workflows/ci.yml/badge.svg)](https://github.com/Lucas-Maingi/mizani/actions/workflows/ci.yml)
+[![Live pipeline](https://github.com/Lucas-Maingi/mizani/actions/workflows/live.yml/badge.svg)](https://github.com/Lucas-Maingi/mizani/actions/workflows/live.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Medallion ETL · Dagster · dbt · DuckDB · data quality** — a bronze/silver/gold
 pipeline that ingests four genuinely messy public data sources (one JSON API, one
@@ -25,15 +27,38 @@ actual pipeline run on that date, not estimated.
 **Dropped:** the Kenya Open Data portal (`kenya.opendataforafrica.org`) returned
 `403 Forbidden` at verification time and is historically unreliable, so it was not used.
 
+## Live demo
+
+The pipeline runs on a weekly schedule against the live sources and publishes its
+output — if the badge above is green, everything below was built from a real recent run:
+
+* **[Dashboard](https://lucas-maingi.github.io/mizani/)** — headline metrics and charts
+  queried from gold at build time
+* **[Data-quality report](https://lucas-maingi.github.io/mizani/quality.html)** — what
+  was quarantined and *why*, plus the cross-source reconciliation table
+* **[dbt docs & lineage](https://lucas-maingi.github.io/mizani/dbt/)** — every model,
+  test, and edge in the graph
+
 ## Architecture
 
-```
-  World Bank API ─┐
-  CBK forex CSV  ─┤   BRONZE          SILVER              GOLD
-  CBK mobile HTML─┼─▶ as-received ─▶  validated (Pandera) ─▶ star schema (dbt)
-  GSMA XLSX      ─┘   + row hash      + quarantine           + dbt tests/docs
-                      + ingest log      with reasons
-                            DuckDB warehouse (local-first)
+```mermaid
+flowchart LR
+    subgraph sources["4 live sources"]
+        WB["World Bank API<br/><i>JSON</i>"]
+        FX["CBK forex CSV<br/><i>headerless, 3 date formats</i>"]
+        MP["CBK mobile payments<br/><i>HTML scrape</i>"]
+        GS["GSMA workbook<br/><i>wide XLSX</i>"]
+    end
+    subgraph duck["DuckDB warehouse"]
+        B["<b>bronze</b><br/>as-received + row hash<br/>idempotent, ingest log"]
+        S["<b>silver</b><br/>Pandera validation<br/>quarantine with reasons"]
+        G["<b>gold</b><br/>dbt star schema<br/>32 data tests + lineage"]
+        Q[("silver.quarantine<br/>rejected rows + why")]
+    end
+    WB & FX & MP & GS --> B --> S --> G
+    S -.-> Q
+    G --> DASH["published dashboard<br/>+ quality report"]
+    DAG["Dagster<br/>21-asset graph, retries,<br/>daily schedule"] -.orchestrates.- duck
 ```
 
 ### The bronze contract (implemented)
@@ -69,13 +94,23 @@ The CBK file's slash-dates were proven to be DD/MM (not MM/DD) by matching ident
 rate values across the file's two date formats — documented in
 [`silver/cbk_fx.py`](src/mizani/silver/cbk_fx.py).
 
+### Cross-source reconciliation (implemented)
+
+Cleaned sources are checked **against each other**: `recon_usd_rate_yearly` compares
+CBK's daily USD averages with the World Bank's independently published annual figure,
+and a dbt test fails the build if they diverge more than 1% on any year with ≥200
+trading days of coverage. Measured agreement on 2017–2023: within **0.09%** — strong
+evidence the messy parsing (three date formats, two quote conventions, per-100-unit
+quotes) is actually right.
+
 ### The gold star schema (implemented)
 
 Built with dbt-duckdb: `dim_date` (9,193-day spine), `dim_country`, `dim_currency`,
 and four facts — `fact_exchange_rate` (37,154 rows, every quote normalized to KES per
 1 foreign unit across both published conventions), `fact_mobile_money` (231 monthly
-rows), `fact_worldbank_indicator` (121), `fact_gsma_metric` (56,616). 28 dbt data
-tests (unique, not_null, relationships, ranges) — 41/41 green including seeds/models.
+rows), `fact_worldbank_indicator` (121), `fact_gsma_metric` (56,616), plus the
+reconciliation model. 32 dbt data tests (unique, not_null, relationships, ranges,
+cross-source tolerance) — 46/46 green including seeds and models.
 
 ### Orchestration (implemented)
 
@@ -147,3 +182,4 @@ fragility).
 - [x] **M3** — gold: dbt-duckdb star schema (fact exchange rates / mobile money; dims country, currency, date) + dbt tests
 - [x] **M4** — orchestration: Dagster asset graph, retries, honest backfill story
 - [x] **M5** — CI (lint + tests + dbt build on fixtures + Docker), analytical notebook, limitations doc
+- [x] **M6** — live: weekly scheduled run publishing the dashboard, quality report, and dbt docs to GitHub Pages; cross-source reconciliation with a dbt-tested 1% tolerance

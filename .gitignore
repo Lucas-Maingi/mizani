@@ -16,3 +16,6 @@ dbt/dbt_packages/
 dbt/logs/
 logs/
 dbt/.user.yml
+
+# generated static site (published by the live workflow, never committed)
+site/

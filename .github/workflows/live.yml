@@ -1,0 +1,73 @@
+name: Live pipeline & publish
+
+# Runs the real pipeline against the live sources on a weekly schedule and
+# publishes the dashboard, data-quality report, and dbt docs to GitHub Pages.
+# A red badge here means the live run failed — that is the point.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays 04:00 UTC (07:00 Nairobi)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  run-and-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e . matplotlib
+
+      - name: Bronze — fetch live sources
+        run: python -m mizani.bronze.run
+        env:
+          MIZANI_DB: ${{ github.workspace }}/data/mizani.duckdb
+
+      - name: Silver — validate & quarantine
+        run: python -m mizani.silver.run
+        env:
+          MIZANI_DB: ${{ github.workspace }}/data/mizani.duckdb
+
+      - name: Gold — dbt build (all data tests)
+        working-directory: dbt
+        run: |
+          dbt deps --profiles-dir .
+          dbt build --profiles-dir .
+        env:
+          MIZANI_DB: ${{ github.workspace }}/data/mizani.duckdb
+
+      - name: dbt docs
+        working-directory: dbt
+        run: dbt docs generate --static --profiles-dir .
+        env:
+          MIZANI_DB: ${{ github.workspace }}/data/mizani.duckdb
+
+      - name: Build site
+        run: |
+          python scripts/build_site.py data/mizani.duckdb site
+          mkdir -p site/dbt
+          cp dbt/target/static_index.html site/dbt/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
