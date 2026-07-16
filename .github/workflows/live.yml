@@ -13,6 +13,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  issues: write
 
 concurrency:
   group: pages
@@ -65,9 +66,46 @@ jobs:
           mkdir -p site/dbt
           cp dbt/target/static_index.html site/dbt/index.html
 
+      - name: Validate data feed before publishing
+        run: |
+          python - <<'EOF'
+          import json
+          feed = json.load(open("site/data/latest.json"))
+          assert feed["schema_version"] == 1
+          assert feed["fx"]["kes_per_usd"]["mean"] > 0
+          assert feed["kenya_mobile_money"]["registered_accounts_millions"] > 0
+          assert len(feed["kenya_mobile_money"]["cico_value_ksh_billions_last_12m"]) == 12
+          print("feed ok:", feed["generated_at_utc"])
+          EOF
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
       - uses: actions/deploy-pages@v4
         id: deployment
+
+      - name: Open an issue if the live run failed
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const title = `Live pipeline failed: ${new Date().toISOString().slice(0, 10)}`;
+            const open = await github.rest.issues.listForRepo({
+              ...context.repo, state: "open", labels: "pipeline-failure",
+            });
+            if (open.data.length === 0) {
+              await github.rest.issues.create({
+                ...context.repo,
+                title,
+                labels: ["pipeline-failure"],
+                body: `The scheduled live pipeline run failed — the published site was NOT updated.\n\nRun: ${runUrl}\n\nCheck \`meta.ingestion_log\` semantics: a source that flakes is retried 4x at the HTTP layer before this fires.`,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: open.data[0].number,
+                body: `Live pipeline failed again: ${runUrl}`,
+              });
+            }

@@ -27,6 +27,11 @@ actual pipeline run on that date, not estimated.
 **Dropped:** the Kenya Open Data portal (`kenya.opendataforafrica.org`) returned
 `403 Forbidden` at verification time and is historically unreliable, so it was not used.
 
+**Known freshness gap:** CBK's downloadable historical FX file currently ends at
+2024-01-03 (current rates live only behind a nonce-protected AJAX table). All published
+FX values therefore carry explicit `as_of` dates rather than pretending to be current —
+see the [war stories](docs/war-stories.md) for why we ship the honest gap.
+
 ## Live demo
 
 The pipeline runs on a weekly schedule against the live sources and publishes its
@@ -38,6 +43,10 @@ output — if the badge above is green, everything below was built from a real r
   was quarantined and *why*, plus the cross-source reconciliation table
 * **[dbt docs & lineage](https://lucas-maingi.github.io/mizani/dbt/)** — every model,
   test, and edge in the graph
+* **[Machine-readable feed](https://lucas-maingi.github.io/mizani/data/latest.json)** —
+  `data/latest.json`: latest FX and mobile-money figures, each labeled with its own
+  `as_of` date. Consumed live by [PesaGuard](https://github.com/Lucas-Maingi/PesaGuard),
+  the fraud-detection side of this ecosystem (see below).
 
 ## Architecture
 
@@ -165,6 +174,23 @@ pytest                                             # offline test suite (27 test
 Tests never touch the network: `tests/fixtures/` contains small unmodified subsets of
 the real payloads captured on 2026-07-15. CI (and the Docker job) builds a complete
 warehouse from those fixtures and runs the full dbt build against it on every push.
+
+## War stories
+
+Real incidents from real data, all reproducible from this repo: the day CBK published
+every currency with buy/sell swapped, the row dated 2038, proving DD/MM instead of
+assuming it, and the production timeout that turned the badge red. Read
+[`docs/war-stories.md`](docs/war-stories.md) — it is the best short tour of what this
+pipeline actually does.
+
+## Part of an ecosystem
+
+Mizani **measures** Kenya's mobile-money economy;
+[**PesaGuard**](https://github.com/Lucas-Maingi/PesaGuard) **protects** it — a
+real-time fraud-detection API and analyst console for mobile-money transactions
+([live demo](https://huggingface.co/spaces/lucas-maingi/pesaguard)). PesaGuard's
+console consumes Mizani's published `latest.json` feed for live market context, so
+one project's data product is a running dependency of the other.
 
 ## Design decisions & limitations
 

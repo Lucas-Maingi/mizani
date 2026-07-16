@@ -86,6 +86,76 @@ time.</p>
 </body></html>"""
 
 
+def build_feed(con: duckdb.DuckDBPyConnection) -> dict:
+    """Machine-readable snapshot of gold, published at data/latest.json.
+
+    Every value carries its own as_of date because the sources have very
+    different cadences (the CBK historical FX file currently ends
+    2024-01-03; mobile-money statistics run to the previous month).
+    Consumers must read as_of, not assume freshness.
+    """
+    fx_date, usd_mean, usd_buy, usd_sell = con.execute("""
+        select d.calendar_date, f.kes_per_unit_mean, f.kes_per_unit_buy, f.kes_per_unit_sell
+        from gold.fact_exchange_rate f join gold.dim_date d using (date_key)
+        where f.currency_code = 'USD' order by d.calendar_date desc limit 1
+    """).fetchone()
+    regional = {
+        code: {"units_per_kes": round(1.0 / rate, 6), "as_of": str(day)}
+        for code, rate, day in con.execute("""
+            select f.currency_code, f.kes_per_unit_mean, d.calendar_date
+            from gold.fact_exchange_rate f join gold.dim_date d using (date_key)
+            where f.currency_code in ('TZS','UGX','RWF','BIF')
+            qualify row_number() over (partition by f.currency_code
+                                       order by d.calendar_date desc) = 1
+        """).fetchall()
+    }
+    mm_date, accounts_m, agents, vol_m, val_b = con.execute("""
+        select d.calendar_date, m.registered_accounts_millions, m.active_agents,
+               m.agent_cico_volume_million, m.agent_cico_value_ksh_billions
+        from gold.fact_mobile_money m join gold.dim_date d using (date_key)
+        order by d.calendar_date desc limit 1
+    """).fetchone()
+    trend = con.execute("""
+        select d.calendar_date, m.agent_cico_value_ksh_billions
+        from gold.fact_mobile_money m join gold.dim_date d using (date_key)
+        order by d.calendar_date desc limit 12
+    """).fetchall()
+    ownership = {
+        iso3: {"pct_adults_15plus": round(v, 1), "as_of_year": int(y)}
+        for iso3, v, y in con.execute("""
+            select country_iso3, value, year from gold.fact_worldbank_indicator
+            where indicator_code = 'FX.OWN.TOTL.ZS'
+            qualify row_number() over (partition by country_iso3 order by year desc) = 1
+        """).fetchall()
+    }
+    return {
+        "schema_version": 1,
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source": "https://github.com/Lucas-Maingi/mizani",
+        "license_note": "Aggregated from CBK, World Bank, GSMA public data.",
+        "fx": {
+            "kes_per_usd": {
+                "mean": round(usd_mean, 4),
+                "buy": round(usd_buy, 4),
+                "sell": round(usd_sell, 4),
+                "as_of": str(fx_date),
+            },
+            "regional_units_per_kes": regional,
+        },
+        "kenya_mobile_money": {
+            "as_of_month": str(mm_date),
+            "registered_accounts_millions": round(accounts_m, 2),
+            "active_agents": int(agents),
+            "agent_cico_volume_million": round(vol_m, 2),
+            "agent_cico_value_ksh_billions": round(val_b, 2),
+            "cico_value_ksh_billions_last_12m": [
+                {"month": str(m), "value": round(v, 2)} for m, v in reversed(trend)
+            ],
+        },
+        "account_ownership": ownership,
+    }
+
+
 def build(db_path: str, out_dir: str) -> None:
     con = duckdb.connect(db_path, read_only=True)
     out = Path(out_dir)
@@ -256,6 +326,13 @@ def build(db_path: str, out_dir: str) -> None:
     """
     (out / "quality.html").write_text(
         page("Mizani — data quality", quality_body, built_at), encoding="utf-8"
+    )
+
+    # ---------- machine-readable feed (consumed by PesaGuard's console) ----------
+    feed = build_feed(con)
+    (out / "data").mkdir(exist_ok=True)
+    (out / "data" / "latest.json").write_text(
+        json.dumps(feed, indent=2, default=str), encoding="utf-8"
     )
     con.close()
     print(f"site written to {out.resolve()}")
