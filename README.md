@@ -70,6 +70,14 @@ flowchart LR
     DAG["Dagster<br/>21-asset graph, retries,<br/>daily schedule"] -.orchestrates.- duck
 ```
 
+The same graph as Dagster sees it — all 21 assets, bronze → silver → dbt staging → gold:
+
+![Dagster asset lineage](docs/img/dagster-asset-graph.png)
+
+And the published output ([live version](https://lucas-maingi.github.io/mizani/)):
+
+![Published dashboard](docs/img/dashboard.png)
+
 ### The bronze contract (implemented)
 
 * Rows land **exactly as received** — every source column is VARCHAR, untouched.
@@ -147,7 +155,8 @@ dagster job execute -m mizani.orchestration.definitions -j full_refresh
 
 ## The analytical payoff
 
-[`notebooks/mobile_money_analysis.ipynb`](notebooks/mobile_money_analysis.ipynb) answers
+[`notebooks/mobile_money_analysis.ipynb`](notebooks/mobile_money_analysis.ipynb)
+([rendered on nbviewer](https://nbviewer.org/github/Lucas-Maingi/mizani/blob/main/notebooks/mobile_money_analysis.ipynb)) answers
 one question from gold alone: **how big is Kenya's mobile-money cash economy in hard
 currency, and is the region catching up?** The USD conversion joins CBK's monthly
 cash-in/cash-out values against that month's average official rate — a join that only
